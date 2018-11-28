@@ -2,11 +2,13 @@
 
 # A very light-weight interface just for responsive ui to get states
 
-source func.cgi
+source ./func.cgi
 source /system/sdcard/scripts/common_functions.sh
 
 
 echo "Content-type: text"
+echo "Pragma: no-cache"
+echo "Cache-Control: max-age=0, no-store, no-cache"
 echo ""
 
 if [ -n "$F_cmd" ]; then
@@ -28,22 +30,24 @@ if [ -n "$F_cmd" ]; then
     ;;
 
   rtsp_h264)
-    echo $(rtsp_server status)
+    echo $(rtsp_h264_server status)
     ;;
 
   rtsp_mjpeg)
-    if [ -f /run/v4l2rtspserver-master-mjpeg.pid ];
-      then rtsp_mjpeg="ON";
-    else
-      rtsp_mjpeg="OFF";
-    fi
-    echo $rtsp_mjpeg
+    echo $(rtsp_mjpeg_server status)
     ;;
 
   auto_night_detection)
     echo $(auto_night_mode status)
     ;;
-
+  auto_night_detection_mode)
+    if [ -f /system/sdcard/config/autonight.conf ];
+      then night_mode=$(cat /system/sdcard/config/autonight.conf);
+    else
+      night_mode="HW";
+    fi
+    echo $night_mode
+    ;;
   mqtt_status)
     if [ -f /run/mqtt-status.pid ];
       then mqtt_status="ON";
@@ -78,7 +82,54 @@ if [ -n "$F_cmd" ]; then
   motion_tracking)
     echo $(motion_tracking status)
     ;;
+  motion_mail)
+    . /system/sdcard/config/motion.conf 2> /dev/null
+    if [ "$sendemail" == "true" ]; then
+      echo "ON"
+    else
+        echo "OFF"
+    fi
+    ;;
+  motion_led)
+    . /system/sdcard/config/motion.conf 2> /dev/null
+    if [ "$motion_trigger_led" == "true" ]; then
+      echo "ON"
+    else
+      echo "OFF"
+    fi
+    ;;
+  motion_snapshot)
+    . /system/sdcard/config/motion.conf 2> /dev/null
+    if [ "$save_snapshot" == "true" ]; then
+      echo "ON"
+    else
+      echo "OFF"
+    fi
+    ;;
+  motion_mqtt)
+    . /system/sdcard/config/motion.conf 2> /dev/null
+    if [ "$publish_mqtt_message" == "true" ]; then
+      echo "ON"
+    else
+      echo "OFF"
+    fi
+    ;;
+  motion_mqtt_snapshot)
+    . /system/sdcard/config/motion.conf 2> /dev/null
+    if [ "$publish_mqtt_snapshot" == "true" ]; then
+      echo "ON"
+    else
+      echo "OFF"
+    fi
+    ;;
 
+
+  hostname)
+    echo $(hostname);
+    ;;
+  version)
+    echo $(cat /system/sdcard/.lastCommitDate);
+    ;;
   *)
     echo "Unsupported command '$F_cmd'"
     ;;

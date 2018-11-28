@@ -1,83 +1,217 @@
 #!/bin/sh
 
-CONFIGPATH=/system/sdcard/config
-echo "Starting up CFW"
+export LD_LIBRARY_PATH='/system/sdcard/lib/:/thirdlib:/system/lib'
 
-## Update hostname:
+CONFIGPATH="/system/sdcard/config"
+LOGDIR="/system/sdcard/log"
+LOGPATH="$LOGDIR/startup.log"
+if [ ! -d $LOGDIR ]; then
+  mkdir -p $LOGDIR
+fi
+echo "==================================================" >> $LOGPATH
+echo "Starting the Dafang Hacks Custom Application Layer" >> $LOGPATH
+echo "==================================================" >> $LOGPATH
+
+## Stop telnet for security reasons
+killall telnetd
+
+## Load some common functions:
+. /system/sdcard/scripts/common_functions.sh
+echo "Loaded common functions" >> $LOGPATH
+
+## Create root user home directory and etc directory on sdcard:
+if [ ! -d /system/sdcard/root ]; then
+  mkdir /system/sdcard/root
+  echo 'PATH=/system/sdcard/bin:$PATH' > /system/sdcard/root/.profile
+  echo "Created root user home directory" >> $LOGPATH
+fi
+mkdir -p /system/sdcard/etc
+while IFS= read -r etc_element
+do
+  if [ ! -f "/system/sdcard/etc/$etc_element" ] && [ ! -d "/system/sdcard/etc/$etc_element" ]; then
+    cp -fRL "/etc/$etc_element" /system/sdcard/etc
+  fi
+done <<- END
+	TZ
+	protocols
+	fstab
+	inittab
+	init.d
+	hosts
+	group
+	resolv.conf
+	hostname
+	profile
+	os-release
+	sensor
+	webrtc_profile.ini
+END
+echo "Created etc directory on sdcard" >> $LOGPATH
+
+mount -o bind /system/sdcard/bin/busybox /bin/busybox
+echo "Bind mounted /system/sdcard/bin/busybox to /bin/busybox" >> $LOGPATH
+mount -o bind /system/sdcard/root /root
+echo "Bind mounted /system/sdcard/root to /root" >> $LOGPATH
+mount -o bind /system/sdcard/etc /etc
+echo "Bind mounted /system/sdcard/etc to /etc" >> $LOGPATH
+
+## Create a swap file on SD if desired
+SWAP=false
+SWAPPATH="/system/sdcard/swapfile"
+SWAPSIZE=256
+if [ "$SWAP" = true ]; then
+  if [ ! -f $SWAPPATH ]; then
+    echo "Creating ${SWAPSIZE}MB swap file on SD card"  >> $LOGPATH
+    dd if=/dev/zero of=$SWAPPATH bs=1M count=$SWAPSIZE
+    mkswap $SWAPPATH
+    echo "Swap file created in $SWAPPATH" >> $LOGPATH
+  fi
+  echo "Configuring swap file" >> $LOGPATH
+  swapon $SWAPPATH
+  echo "Swap set on file $SWAPPATH" >> $LOGPATH
+fi
+
+## Create crontab dir and start crond:
+if [ ! -d /system/sdcard/config/cron ]; then
+  mkdir -p ${CONFIGPATH}/cron/crontabs
+  CRONPERIODIC="${CONFIGPATH}/cron/periodic"
+  echo ${CONFIGPATH}/cron/crontabs/periodic
+  # Wish busybox sh had brace expansion...
+  mkdir -p ${CRONPERIODIC}/15min \
+           ${CRONPERIODIC}/hourly \
+           ${CRONPERIODIC}/daily \
+           ${CRONPERIODIC}/weekly \
+           ${CRONPERIODIC}/monthly
+  cat > ${CONFIGPATH}/cron/crontabs/root <<EOF
+# min   hour    day     month   weekday command
+*/15    *       *       *       *       busybox run-parts ${CRONPERIODIC}/15min
+0       *       *       *       *       busybox run-parts ${CRONPERIODIC}/hourly
+0       2       *       *       *       busybox run-parts ${CRONPERIODIC}/daily
+0       3       *       *       6       busybox run-parts ${CRONPERIODIC}/weekly
+0       5       1       *       *       busybox run-parts ${CRONPERIODIC}/monthly
+EOF
+  echo "Created cron directories and standard interval jobs" >> $LOGPATH
+fi
+/system/sdcard/bin/busybox crond -L /system/sdcard/log/crond.log -c /system/sdcard/config/cron/crontabs
+
+## Set Hostname
+if [ ! -f $CONFIGPATH/hostname.conf ]; then
+  cp $CONFIGPATH/hostname.conf.dist $CONFIGPATH/hostname.conf
+fi
 hostname -F $CONFIGPATH/hostname.conf
 
-## NTP Server
+if [ -f $CONFIGPATH/usb_eth_driver.conf ]; then
+  ## Start USB Ethernet:
+  echo "USB_ETHERNET: Detected USB config. Loading USB Ethernet driver" >> $LOGPATH
+  insmod /system/sdcard/driver/usbnet.ko
+  insmod /system/sdcard/driver/asix.ko
+  ifconfig eth0 up
+  udhcpc_status=$(udhcpc -i eth0 -p /var/run/udhcpc.pid -b -x hostname:"$(hostname)")
+else
+  ## Start Wifi:
+  if [ ! -f $CONFIGPATH/wpa_supplicant.conf ]; then
+  echo "Warning: You have to configure wpa_supplicant in order to use wifi. Please see /system/sdcard/config/wpa_supplicant.conf.dist for further instructions."
+  fi
+  MAC=$(grep MAC < /params/config/.product_config | cut -c16-27 | sed 's/\(..\)/\1:/g;s/:$//')
+  if [ -f /driver/8189es.ko ]; then
+    # Its a DaFang
+    insmod /driver/8189es.ko rtw_initmac="$MAC"
+  elif [ -f /driver/8189fs.ko ]; then
+    # Its a XiaoFang T20
+    insmod /driver/8189fs.ko rtw_initmac="$MAC"
+  else
+    # Its a Wyzecam V2
+    insmod /driver/rtl8189ftv.ko rtw_initmac="$MAC"
+  fi
+  wpa_supplicant_status="$(wpa_supplicant -d -B -i wlan0 -c $CONFIGPATH/wpa_supplicant.conf -P /var/run/wpa_supplicant.pid)"
+  echo "wpa_supplicant: $wpa_supplicant_status" >> $LOGPATH
+  udhcpc_status=$(udhcpc -i wlan0 -p /var/run/udhcpc.pid -b -x hostname:"$(hostname)")
+fi
+
+echo "udhcpc: $udhcpc_status" >> $LOGPATH
+
+## Sync the via NTP:
+if [ ! -f $CONFIGPATH/ntp_srv.conf ]; then
+  cp $CONFIGPATH/ntp_srv.conf.dist $CONFIGPATH/ntp_srv.conf
+fi
 ntp_srv="$(cat "$CONFIGPATH/ntp_srv.conf")"
+timeout -t 30 sh -c "until ping -c1 \"$ntp_srv\" &>/dev/null; do sleep 3; done";
+/system/sdcard/bin/busybox ntpd -p "$ntp_srv"
 
-#read v4l2config (username, password)
-v4l2config=$(cat $CONFIGPATH/v4l2rtspserver.conf)
-## Get real Mac address from config file:
-MAC=$(grep MAC < /params/config/.product_config | cut -c16-27 | sed 's/\(..\)/\1:/g;s/:$//')
-
-## Start Wifi:
-insmod /driver/8189es.ko rtw_initmac="$MAC"
-wpa_supplicant -B -i wlan0 -c $CONFIGPATH/wpa_supplicant.conf -P /var/run/wpa_supplicant.pid
-udhcpc -i wlan0 -p /var/run/udhcpc.pid -b -x hostname:"$(hostname)"
-
-## Start Audio:
+## Load audio driver module:
 insmod /system/sdcard/driver/audio.ko
 
-## Start GPIO:
-setgpio () {
-  GPIOPIN=$1
-  echo "$GPIOPIN" > /sys/class/gpio/export
-  echo out > "/sys/class/gpio/gpio$GPIOPIN/direction"
-  echo 0 > "/sys/class/gpio/gpio$GPIOPIN/active_low"
-  echo 1 > "/sys/class/gpio/gpio$GPIOPIN/value"
-}
-
-# IR-LED
-setgpio 49
+## Initialize the GPIOS:
+for pin in 25 26 38 39 49; do
+  init_gpio $pin
+done
+# the ir_led pin is a special animal and needs active low
 echo 1 > /sys/class/gpio/gpio49/active_low
-echo 1 > /sys/class/gpio/gpio49/value
-# Yellow-LED
-setgpio 38
-echo 0 > /sys/class/gpio/gpio38/value
-# Blue-LED
-setgpio 39
-# IR-Cut:
-setgpio 25
-setgpio 26
 
-# Startup Motor:
-insmod /system/sdcard/driver/sample_motor.ko
+echo "Initialized gpios" >> $LOGPATH
 
-## Start Sensor:
-insmod /system/sdcard/driver/tx-isp.ko isp_clk=100000000
-insmod /system/sdcard/driver/sensor_jxf22.ko data_interface=2 pwdn_gpio=-1 reset_gpio=18 sensor_gpio_func=0
+## Set leds to default startup states:
+ir_led off
+ir_cut on
+yellow_led off
+blue_led on
 
-## Update time
-/system/sdcard/bin/busybox ntpd -q -n -p $ntp_srv
+## Load motor driver module:
+insmod /driver/sample_motor.ko
 
-## Start FTP & SSH
-/system/sdcard/bin/dropbearmulti dropbear -R
-/system/sdcard/bin/bftpd -d
+## Determine the image sensor model:
+insmod /system/sdcard/driver/sinfo.ko
+echo 1 >/proc/jz/sinfo/info
+sensor=$(grep -m1 -oE 'jxf[0-9]*$' /proc/jz/sinfo/info)
+echo "Determined image sensor model as $sensor" >> $LOGPATH
+
+## Start the image sensor:
+insmod /driver/tx-isp.ko isp_clk=100000000
+if [ $sensor = 'jxf22' ]; then
+  insmod /driver/sensor_jxf22.ko data_interface=2 pwdn_gpio=-1 reset_gpio=18 sensor_gpio_func=0
+else
+  if [ ! -f /etc/sensor/jxf23.bin ]; then
+    cp /etc/sensor/jxf22.bin /etc/sensor/jxf23.bin
+    cp /etc/sensor/jxf22move.txt /etc/sensor/jxf23move.txt
+  fi
+  insmod /system/sdcard/driver/sensor_jxf23.ko data_interface=2 pwdn_gpio=-1 reset_gpio=18 sensor_gpio_func=0
+fi
+
+## Start FTP & SSH Server:
+dropbear_status=$(/system/sdcard/bin/dropbearmulti dropbear -R)
+echo "dropbear: $dropbear_status" >> $LOGPATH
+
+bftpd_status=$(/system/sdcard/bin/bftpd -d)
+echo "bftpd: $bftpd_status" >> $LOGPATH
+
+## Create a certificate for the webserver
+if [ ! -f $CONFIGPATH/lighttpd.pem ]; then
+  export OPENSSL_CONF=$CONFIGPATH/openssl.cnf
+  /system/sdcard/bin/openssl req -new -x509 -keyout $CONFIGPATH/lighttpd.pem -out $CONFIGPATH/lighttpd.pem -days 365 -nodes -subj "/C=DE/ST=Bavaria/L=Munich/O=.../OU=.../CN=.../emailAddress=..."
+  chmod 400 $CONFIGPATH/lighttpd.pem
+  echo "Created new certificate for webserver" >> $LOGPATH
+fi
 
 ## Start Webserver:
-/system/sdcard/bin/boa -c /system/sdcard/config/
-#/system/sdcard/bin/lighttpd -f /system/sdcard/config/lighttpd.conf
+if [ ! -f $CONFIGPATH/lighttpd.conf ]; then
+  cp $CONFIGPATH/lighttpd.conf.dist $CONFIGPATH/lighttpd.conf
+fi
+lighttpd_status=$(/system/sdcard/bin/lighttpd -f /system/sdcard/config/lighttpd.conf)
+echo "lighttpd: $lighttpd_status" >> $LOGPATH
 
-## Configure OSD
+## Configure OSD:
 if [ -f /system/sdcard/controlscripts/configureOsd ]; then
-    source /system/sdcard/controlscripts/configureOsd  2>/dev/null
+    . /system/sdcard/controlscripts/configureOsd  2>/dev/null
 fi
 
-## Configure Motion
+## Configure Motion:
 if [ -f /system/sdcard/controlscripts/configureMotion ]; then
-    source /system/sdcard/controlscripts/configureMotion  2>/dev/null
+    . /system/sdcard/controlscripts/configureMotion  2>/dev/null
 fi
 
-
-## Autostart
+## Autostart all enabled services:
 for i in /system/sdcard/config/autostart/*; do
   $i
 done
 
-# Removing rtsp server startup here since it should be started if necessary in config/autostart
-
-echo "Startup finished!"
+echo "Startup finished!" >> $LOGPATH

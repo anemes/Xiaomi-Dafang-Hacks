@@ -1,58 +1,68 @@
-## Xiaomi Dafang Hacks / Xiaofang with T20 Processor
+## Xiaomi DaFang Hacks / XiaoFang 1S / Wyzecam V2 / Wyzecam Pan / Other T20 Devices
 
-This repository contains a Custom Firmware for the Xiaomi Dafang Camera. It also supports the Xiaofang with a T20 Processor. 
-If you have a Xiaofang with a ARM-Processor, consider using https://github.com/samtap/fang-hacks
+[![Join the chat at https://gitter.im/Xiaomi-Dafang-Hacks/Lobby](https://badges.gitter.im/Xiaomi-Dafang-Hacks/Lobby.svg)](https://gitter.im/Xiaomi-Dafang-Hacks/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
- 
-It also has a collection of information & software.
+This repository contains custom firmwares for the following devices:
 
-![Dafang](/dafang.png)
-![Dafang](/xiaofang.png)
+Name | Picture
+--- | ---
+Xiaomi Dafang | ![Dafang](/dafang.png)
+Xiaomi Xiaofang 1S | ![XiaoFang](/xiaofang.png)
+Wyzecam Pan | ![Dafang](/dafang.png)
+Wyzecam V2 | ![XiaoFang](/xiaofang.png)
+Sannce I21AG, MixSight HX-I2110T2, WanScam HW0036, Escam G02, Digoo BB-M2 | ![XiaoFang](/sannce.jpg)
+Any other Device with Ingenic T10/T20 Device | ![T20](/t20.png)
+
+If you have a classic XiaoFang with a ARM-Processor, consider using https://github.com/samtap/fang-hacks
+
+### Attentention: Do not install the latest Firmware on your Device. It will disable the support of this hack. 
+
+Further information about this topic can be found here: https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks/issues/669
+
+
 ## How to install the CFW
 
 Before you try to install it, please read the [FAQ](/hacks/faq.md)
 
-After that, continue to the 
+After that, continue to the
 [Installation](/hacks/install_cfw.md)
 
-## Information about the Dafang:
 
-[Teardown](/informations/teardown.md)
+### Support
 
-[Hardware](/informations/hardware.md)
+If you encounter a problem, please see first if you find similiar open/closed issues. 
+Or ask in our [Gitter channel](https://gitter.im/Xiaomi-Dafang-Hacks) for help.
 
-[Portscan of the Original Firmware](/informations/portscan.md)
+If you don't find anything related, feel free to open a new issue.
+If you/we solve your issue, please condense your gained insights into a pull request for continuous self-improvement.
 
-[Bootlog of the Original Firmware](/informations/bootlog.md)
 
-## Hacks for the Development:
-[Installation of Serial Headers](/hacks/serial.md)
+## Technical Information about the hack:
 
-[Getting Root Access using the Serial Connection](/hacks/getroot.md)
+Start [here](/hacks/technical.md)
 
-[Installing Telnet & Configuring Wifi](/hacks/install_telnetandwifi.md)
+## Integration in Home Automation Systems:
 
-[Dumping the Firmware](/hacks/firmware-dump.md)
+[Domoticz](/integration/domoticz/domoticz.md)
 
-[Modifying the Firmware](/hacks/howto_modfirmware.md)
+[Home Assistant](/integration/homeassistant/homeassistant.md)
 
-[Flashing the Firmware](/hacks/howto_firmwareflash.md)
+[HomeKit](/integration/homekit/homekit.md)
 
-[Old Custom Firmware with Telnet](https://www.dropbox.com/s/9t9op698fza1tl2/demo.bin?dl=0)
+[OpenHab](https://community.openhab.org/t/how-to-configure-a-hacked-xiaomi-dafang-to-work-with-openhab/51121)
 
-## Software Development:
-[The Ingenic T20 Toolchain](https://github.com/dim08/Ingenic-T10_20)
+[Synology](/integration/synology/synology.md)
 
-[How to Build Software for the Ingenic T20 Platform](https://github.com/EliasKotlyar/Xiaomi-Dafang-Software)
+[tinyCam](/integration/tinycam/tinycam.md)
 
-## Original Firmware:
-[5.5.1.177](/firmware_original/demo_5.5.1.177.bin)
+[Zoneminder](/integration/zoneminder/zoneminder.md)
 
-[5.5.1.194](/firmware_original/demo_5.5.1.194.bin)
+## Other features
 
-## Viewer and control solution:
+### Motion detection
 
-After install, you can use this [android application](https://play.google.com/apps/testing/io.ext.medinvention.dafangcam) developed by [@medinvention](https://github.com/mmohamed) and available at [GitLab](https://gitlab.com/mmohamed/DafangCam)
+It is possible to run your own scripts on motion detection. See [here](/integration/custom/motiondetection.md)
 
 ## Contributions:
-Any contribution to the development is highly welcome. The best possibility is to open a pull request on GitHub.
+
+Any contribution to the development is highly welcome. Simply open a pull request on GitHub.

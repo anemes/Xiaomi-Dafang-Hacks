@@ -1,5 +1,10 @@
 #!/bin/sh
 PIDFILE="/run/recording.pid"
+DCIM_PATH="/system/sdcard/DCIM"
+
+if [ ! -d "$DCIM_PATH" ]; then
+  mkdir -p $DCIM_PATH
+fi
 
 status()
 {
@@ -11,24 +16,29 @@ status()
 
 start()
 {
-//if [ -f /run/auto-night-detection.pid ]; then
-if [ -f $PIDFILE ]; then
-echo "recording already running";
-
-else
-
-  LOG=/dev/null
-  echo "Starting Auto Night Detection"
-  /system/sdcard/bin/busybox nohup FILE=`date +%Y-%m-%d_%H.%M.mov` && /system/sdcard/bin/avconv -rtsp_transport tcp -y -i rtsp://root@ismart12:0.0.0.0:8554/unicast -vcodec copy -c:a aac -strict experimental -t 10 /system/sdcard/DCIM/VideoRecorder/$FILE  &>/dev/null &  ##change me
-  echo "$!" > "$PIDFILE"
-fi
+  if [ -f $PIDFILE ]; then
+    echo "Recording already running";
+  else
+    echo "Start recording"
+    SUB_DIR="$(date +%m%dFANG)"
+    if [ ! -d "$DCIM_PATH/$SUB_DIR" ]; then
+      mkdir -p "$DCIM_PATH/$SUB_DIR"
+    fi
+    FILE_NAME="MOV_$(date +%H%M.mov)"
+    RECORDING_PATH="$DCIM_PATH/$SUB_DIR/$FILE_NAME"
+    /system/sdcard/bin/busybox nohup /system/sdcard/bin/avconv -rtsp_transport tcp -y -i rtsp://0.0.0.0:8554/unicast -vcodec copy -c:a aac -strict experimental "$RECORDING_PATH"  &>/dev/null &
+    echo "$!" > "$PIDFILE"
+  fi
 }
 
 stop()
 {
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   if [ "$pid" ]; then
-     kill $pid &&  rm "$PIDFILE"
+    kill "$pid" &&  rm "$PIDFILE"
+    echo "Stopped recording"
+  else
+    echo "Could not find a running recording to stop."
   fi
 }
 
@@ -36,8 +46,7 @@ if [ $# -eq 0 ]; then
   start
 else
   case $1 in start|stop|status)
-    $1
-    ;;
+      $1
+      ;;
   esac
 fi
-
